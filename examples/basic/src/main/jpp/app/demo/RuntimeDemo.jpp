@@ -1,0 +1,19 @@
+package app.demo;
+
+import dev.javapp.runtime.Option;
+import dev.javapp.runtime.Result;
+
+class RuntimeDemo {
+    static Option<String> maybeName(String value) {
+        return Option.ofNullable(value);
+    }
+
+    static Result<Integer, String> parseInt(String value) {
+        try {
+            return Result.ok(Integer.parseInt(value));
+        } catch (NumberFormatException ex) {
+            return Result.err("not an int: " + value);
+        }
+    }
+}
+

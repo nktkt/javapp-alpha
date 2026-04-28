@@ -1,0 +1,14 @@
+package app.demo;
+
+import java.io.ByteArrayInputStream;
+
+class ResourceDemo {
+    static int readFirst(byte[] bytes) throws java.io.IOException {
+        use in = new ByteArrayInputStream(bytes);
+        defer ResourceDemo.afterRead();
+        return in.read();
+    }
+
+    static void afterRead() {
+    }
+}

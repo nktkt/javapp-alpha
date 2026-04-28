@@ -1,0 +1,11 @@
+package app.demo;
+
+data class User {
+    UserId id;
+    String name;
+    String? nickname;
+}
+
+value record UserId(long value) {
+}
+

@@ -1,0 +1,8 @@
+build/
+target/
+.javapp/
+.idea/
+.vscode/
+*.class
+*.log
+

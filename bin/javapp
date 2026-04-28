@@ -1,0 +1,13 @@
+#!/usr/bin/env sh
+set -eu
+
+ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+CLASSES_DIR="$ROOT_DIR/.javapp/bootstrap-classes"
+
+mkdir -p "$CLASSES_DIR"
+
+find "$ROOT_DIR/src/main/java" -name '*.java' > "$ROOT_DIR/.javapp/sources.list"
+javac --release 25 -d "$CLASSES_DIR" @"$ROOT_DIR/.javapp/sources.list"
+
+exec java -cp "$CLASSES_DIR" dev.javapp.cli.Main "$@"
+

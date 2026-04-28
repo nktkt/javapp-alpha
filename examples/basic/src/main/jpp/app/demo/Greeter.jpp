@@ -1,0 +1,11 @@
+package app.demo;
+
+class Greeter {
+    static String greet(String? name) {
+        return match (name) {
+            null -> "Hello";
+            var n -> "Hello, {n}";
+        };
+    }
+}
+

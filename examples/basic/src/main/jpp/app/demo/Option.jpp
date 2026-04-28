@@ -1,0 +1,7 @@
+package app.demo;
+
+data enum Option<T> {
+    Some(T value),
+    None
+}
+

@@ -1,0 +1,29 @@
+package app.demo;
+
+class AsyncDemo {
+    static int sum(int left, int right) {
+        scoped {
+            var a = async { left + 1 };
+            var b = async { right + 1 };
+            return a.await() + b.await();
+        }
+    }
+
+    static int timedSum(int left, int right) {
+        scoped timeout 1.seconds {
+            var a = async { left + 1 };
+            var b = async { right + 1 };
+            return a.await() + b.await();
+        }
+    }
+
+    static int timeout() {
+        scoped timeout 1.millis {
+            var slow = async {
+                Thread.sleep(200);
+                return 1;
+            };
+            return slow.await();
+        }
+    }
+}

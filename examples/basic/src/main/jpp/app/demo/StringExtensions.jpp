@@ -1,0 +1,21 @@
+package app.demo;
+
+extension String {
+    boolean hasText() {
+        return this != null && !this.isBlank();
+    }
+
+    String surround(String prefix, String suffix) {
+        return prefix + this + suffix;
+    }
+}
+
+class ExtensionUse {
+    static boolean hasText(String value) {
+        return value.hasText();
+    }
+
+    static String tagged(String value) {
+        return value.surround("[", "]");
+    }
+}

@@ -1,0 +1,7 @@
+package app.demo;
+
+data enum Result<T, E> {
+    Ok(T value),
+    Err(E error)
+}
+
