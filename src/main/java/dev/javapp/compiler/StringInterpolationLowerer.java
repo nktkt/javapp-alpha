@@ -119,6 +119,7 @@ final class StringInterpolationLowerer {
                 if (close > i) {
                     flushText(parts, text);
                     String expression = raw.substring(i + 1, close).strip();
+                    expression = NullCoalescingLowerer.lower(expression);
                     parts.add("String.valueOf(" + expression + ")");
                     i = close;
                     continue;
@@ -144,4 +145,3 @@ final class StringInterpolationLowerer {
         text.setLength(0);
     }
 }
-

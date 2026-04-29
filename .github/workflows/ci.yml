@@ -38,5 +38,8 @@ jobs:
       - name: Build Java++ examples
         run: ./bin/javapp build --source examples/basic/src/main/jpp --classes build/classes --null strict --effects strict
 
+      - name: Run Java++ example
+        run: ./bin/javapp run app.demo.RunDemo --source examples/basic/src/main/jpp --classes build/classes --null strict --effects strict -- CI
+
       - name: Package CLI
         run: mvn -q -DskipTests package

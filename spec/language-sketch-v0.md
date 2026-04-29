@@ -267,6 +267,14 @@ The alpha runtime uses virtual threads. Leaving the `scoped` block cancels unfin
 
 Supported timeout literal units are `millis`, `seconds`, and `minutes`, plus short forms such as `ms`, `s`, and `m`.
 
+## CLI Run
+
+```bash
+javapp run app.demo.RunDemo --source examples/basic/src/main/jpp -- Naoki
+```
+
+`run` builds `.jpp` and `.java` sources into the configured classes directory, then launches the selected Java main class. Build options use the same names as `build`; arguments after `--` are passed to the application unchanged.
+
 ## Migration Report
 
 ```bash

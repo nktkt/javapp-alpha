@@ -186,6 +186,18 @@ public final class TranspilerSmokeTest {
                 }
                 """, StandardCharsets.UTF_8);
 
+        Files.writeString(packageRoot.resolve("CliMain.jpp"), """
+                package app.demo;
+
+                public class CliMain {
+                    public static void main(String[] args) {
+                        String name = args.length > 0 ? args[0] : null;
+                        String fallback = "Java++";
+                        System.out.println("cli:{name ?? fallback}");
+                    }
+                }
+                """, StandardCharsets.UTF_8);
+
         JavappCompiler compiler = new JavappCompiler();
         Path generated = root.resolve("build/generated");
         Path classes = root.resolve("build/classes");
@@ -601,6 +613,28 @@ public final class TranspilerSmokeTest {
 
         int cleanFormatCheck = new Main().run(new String[]{"fmt", "--check", "--source", formatRoot.toString()});
         require(cleanFormatCheck == 0, "fmt --check should pass after formatting");
+
+        ByteArrayOutputStream runOutput = new ByteArrayOutputStream();
+        PrintStream previousRunOut = System.out;
+        try {
+            System.setOut(new PrintStream(runOutput, true, StandardCharsets.UTF_8));
+            int exit = new Main().run(new String[]{
+                    "run",
+                    "app.demo.CliMain",
+                    "--source", sourceRoot.toString(),
+                    "--java-source", root.resolve("src/main/java").toString(),
+                    "--generated", root.resolve("run-generated").toString(),
+                    "--classes", root.resolve("run-classes").toString(),
+                    "--null", "strict",
+                    "--",
+                    "runner"
+            });
+            require(exit == 0, "run should build and execute the selected main class");
+        } finally {
+            System.setOut(previousRunOut);
+        }
+        require(runOutput.toString(StandardCharsets.UTF_8).contains("cli:runner"),
+                "run should pass application arguments after --");
 
         System.out.println("Transpiler smoke test passed.");
     }

@@ -10,6 +10,8 @@ import dev.javapp.compiler.NullMode;
 import dev.javapp.compiler.TranspileResult;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -32,7 +34,7 @@ public final class Main {
         System.exit(exitCode);
     }
 
-    public int run(String[] args) throws IOException {
+    public int run(String[] args) throws IOException, InterruptedException {
         if (args.length == 0 || "--help".equals(args[0]) || "-h".equals(args[0])) {
             printHelp();
             return 0;
@@ -44,6 +46,7 @@ public final class Main {
         return switch (command) {
             case "transpile" -> transpile(options);
             case "build" -> build(options);
+            case "run" -> runProgram(args);
             case "check" -> check(options);
             case "migrate" -> migrate(args);
             case "fmt" -> format(args);
@@ -93,6 +96,36 @@ public final class Main {
 
         System.err.println("Build failed.");
         return 1;
+    }
+
+    private int runProgram(String[] args) throws IOException, InterruptedException {
+        RunOptions options = parseRunOptions(args);
+        if (options == null) {
+            return 1;
+        }
+
+        BuildResult result = compiler.build(
+                options.sourceRoot(),
+                options.javaSourceRoot(),
+                options.generatedRoot(),
+                options.classesRoot(),
+                options.nullMode(),
+                options.effectMode()
+        );
+        printTranspileResults(result.transpiled());
+
+        if (!result.compilerOutput().isBlank()) {
+            System.err.print(result.compilerOutput());
+        }
+        if (!result.success()) {
+            System.err.println("Build failed.");
+            return 1;
+        }
+        if (hasErrors(result.transpiled())) {
+            return 1;
+        }
+
+        return launchMain(options.classesRoot(), options.mainClass(), options.programArgs());
     }
 
     private int check(Map<String, String> options) throws IOException {
@@ -218,6 +251,162 @@ public final class Main {
         return new FormatOptions(root, checkOnly);
     }
 
+    private static RunOptions parseRunOptions(String[] args) {
+        Path sourceRoot = Path.of("src/main/jpp");
+        Path javaSourceRoot = Path.of("src/main/java");
+        Path generatedRoot = Path.of("build/generated/sources/javapp");
+        Path classesRoot = Path.of("build/classes");
+        NullMode nullMode = NullMode.WARN;
+        EffectMode effectMode = EffectMode.WARN;
+        String mainClass = null;
+        List<String> programArgs = new ArrayList<>();
+        boolean afterSeparator = false;
+
+        for (int i = 1; i < args.length; i++) {
+            String token = args[i];
+            if (afterSeparator) {
+                programArgs.add(token);
+                continue;
+            }
+            if ("--".equals(token)) {
+                afterSeparator = true;
+                continue;
+            }
+            if (token.startsWith("--source=")) {
+                sourceRoot = Path.of(token.substring("--source=".length()));
+                continue;
+            }
+            if ("--source".equals(token)) {
+                if (i + 1 >= args.length) {
+                    System.err.println("Usage: javapp run <main-class> [build-options] [-- program-args...]");
+                    return null;
+                }
+                sourceRoot = Path.of(args[++i]);
+                continue;
+            }
+            if (token.startsWith("--java-source=")) {
+                javaSourceRoot = Path.of(token.substring("--java-source=".length()));
+                continue;
+            }
+            if ("--java-source".equals(token)) {
+                if (i + 1 >= args.length) {
+                    System.err.println("Usage: javapp run <main-class> [build-options] [-- program-args...]");
+                    return null;
+                }
+                javaSourceRoot = Path.of(args[++i]);
+                continue;
+            }
+            if (token.startsWith("--generated=")) {
+                generatedRoot = Path.of(token.substring("--generated=".length()));
+                continue;
+            }
+            if ("--generated".equals(token)) {
+                if (i + 1 >= args.length) {
+                    System.err.println("Usage: javapp run <main-class> [build-options] [-- program-args...]");
+                    return null;
+                }
+                generatedRoot = Path.of(args[++i]);
+                continue;
+            }
+            if (token.startsWith("--classes=")) {
+                classesRoot = Path.of(token.substring("--classes=".length()));
+                continue;
+            }
+            if ("--classes".equals(token)) {
+                if (i + 1 >= args.length) {
+                    System.err.println("Usage: javapp run <main-class> [build-options] [-- program-args...]");
+                    return null;
+                }
+                classesRoot = Path.of(args[++i]);
+                continue;
+            }
+            if (token.startsWith("--null=")) {
+                nullMode = NullMode.parse(token.substring("--null=".length()));
+                continue;
+            }
+            if ("--null".equals(token)) {
+                if (i + 1 >= args.length) {
+                    System.err.println("Usage: javapp run <main-class> [build-options] [-- program-args...]");
+                    return null;
+                }
+                nullMode = NullMode.parse(args[++i]);
+                continue;
+            }
+            if (token.startsWith("--effects=")) {
+                effectMode = EffectMode.parse(token.substring("--effects=".length()));
+                continue;
+            }
+            if ("--effects".equals(token)) {
+                if (i + 1 >= args.length) {
+                    System.err.println("Usage: javapp run <main-class> [build-options] [-- program-args...]");
+                    return null;
+                }
+                effectMode = EffectMode.parse(args[++i]);
+                continue;
+            }
+            if (token.startsWith("--")) {
+                System.err.println("Unknown run option: " + token + ". Use '--' before application arguments.");
+                return null;
+            }
+            if (mainClass != null) {
+                System.err.println("Unexpected run argument: " + token + ". Use '--' before application arguments.");
+                return null;
+            }
+            mainClass = token;
+        }
+
+        if (mainClass == null || mainClass.isBlank()) {
+            System.err.println("Usage: javapp run <main-class> [build-options] [-- program-args...]");
+            return null;
+        }
+
+        return new RunOptions(
+                sourceRoot,
+                javaSourceRoot,
+                generatedRoot,
+                classesRoot,
+                nullMode,
+                effectMode,
+                mainClass,
+                List.copyOf(programArgs)
+        );
+    }
+
+    private static int launchMain(Path classesRoot, String mainClass, List<String> programArgs)
+            throws IOException, InterruptedException {
+        List<String> command = new ArrayList<>();
+        command.add(javaExecutable());
+        command.add("-cp");
+        command.add(classesRoot.toString());
+        command.add(mainClass);
+        command.addAll(programArgs);
+
+        Process process = new ProcessBuilder(command).start();
+        Thread stdout = pipe(process.getInputStream(), System.out);
+        Thread stderr = pipe(process.getErrorStream(), System.err);
+        int exitCode = process.waitFor();
+        stdout.join();
+        stderr.join();
+        return exitCode;
+    }
+
+    private static Thread pipe(InputStream input, OutputStream output) {
+        Thread thread = Thread.ofVirtual().start(() -> {
+            try (input) {
+                input.transferTo(output);
+                output.flush();
+            } catch (IOException ex) {
+                throw new RuntimeException(ex);
+            }
+        });
+        return thread;
+    }
+
+    private static String javaExecutable() {
+        Path executable = Path.of(System.getProperty("java.home"), "bin", "java");
+        return executable.toString();
+    }
+
     private static String toJson(List<Diagnostic> diagnostics) {
         StringBuilder out = new StringBuilder();
         out.append("{\"diagnostics\":[");
@@ -324,6 +513,7 @@ public final class Main {
                 Commands:
                   javapp transpile [--source DIR] [--generated DIR] [--null off|warn|strict] [--effects off|warn|strict]
                   javapp build     [--source DIR] [--java-source DIR] [--generated DIR] [--classes DIR] [--effects off|warn|strict]
+                  javapp run       <main-class> [build-options] [-- program-args...]
                   javapp check     [--source DIR] [--null off|warn|strict] [--effects off|warn|strict] [--format text|json]
                   javapp migrate   <java-source-root> [--format text|json]
                   javapp fmt       [source-root] [--source DIR] [--check]
@@ -338,5 +528,17 @@ public final class Main {
     }
 
     private record FormatOptions(Path root, boolean checkOnly) {
+    }
+
+    private record RunOptions(
+            Path sourceRoot,
+            Path javaSourceRoot,
+            Path generatedRoot,
+            Path classesRoot,
+            NullMode nullMode,
+            EffectMode effectMode,
+            String mainClass,
+            List<String> programArgs
+    ) {
     }
 }

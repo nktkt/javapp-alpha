@@ -31,6 +31,7 @@ The compiler is intentionally small. It targets JDK 25+ Java source and lowers J
 ```bash
 ./bin/javapp transpile --source examples/basic/src/main/jpp --generated build/generated/sources/javapp
 ./bin/javapp build --source examples/basic/src/main/jpp --classes build/classes
+./bin/javapp run app.demo.RunDemo --source examples/basic/src/main/jpp --classes build/classes -- Naoki
 ./bin/javapp check --source examples/basic/src/main/jpp --null strict --effects strict
 ./bin/javapp fmt examples/basic/src/main/jpp --check
 ./bin/javapp migrate src/main/java
@@ -75,6 +76,7 @@ src/test/     executable smoke test
 - runtime `Option<T>` and `Result<T,E>` sealed types with common map/flatMap/orElse helpers
 - simple string interpolation such as `"Hello, {name}"`
 - diagnostics with stable codes such as `JPP_NULL_001` and `JPP_MIGRATE_001`
+- `javapp run` for build-and-run execution of a selected main class
 - `javapp check` for no-output diagnostics in `text` and `json` formats
 - migration report hints for existing Java sources with `text` and `json` output
 - `javapp fmt` for minimal `.jpp` formatting and `--check` CI mode
