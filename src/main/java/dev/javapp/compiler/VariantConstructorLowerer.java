@@ -27,9 +27,13 @@ final class VariantConstructorLowerer {
                 }
 
                 boolean generic = matcher.group(2) != null && !matcher.group(2).isBlank();
-                for (String variant : parseVariants(source.substring(openBrace + 1, closeBrace))) {
-                    variants.merge(variant, new VariantInfo(variant, generic),
-                            (left, right) -> new VariantInfo(left.name(), left.generic() || right.generic()));
+                for (VariantInfo variant : parseVariants(source.substring(openBrace + 1, closeBrace), generic)) {
+                    variants.merge(variant.name(), variant,
+                            (left, right) -> new VariantInfo(
+                                    left.name(),
+                                    left.generic() || right.generic(),
+                                    left.noArgs() && right.noArgs()
+                            ));
                 }
                 cursor = closeBrace + 1;
             }
@@ -87,10 +91,15 @@ final class VariantConstructorLowerer {
                                 && !isMatchPattern(source, callStart)) {
                             int callEnd = SourceScanner.findMatching(source, callStart, '(', ')');
                             if (callEnd >= 0) {
-                                out.append("new ")
-                                        .append(identifier)
-                                        .append(variant.generic() ? "<>" : "")
-                                        .append(source, callStart, callEnd + 1);
+                                String arguments = source.substring(callStart + 1, callEnd).strip();
+                                if (variant.noArgs() && arguments.isBlank()) {
+                                    out.append(identifier).append(".instance()");
+                                } else {
+                                    out.append("new ")
+                                            .append(identifier)
+                                            .append(variant.generic() ? "<>" : "")
+                                            .append(source, callStart, callEnd + 1);
+                                }
                                 i = callEnd;
                             } else {
                                 out.append(identifier);
@@ -154,15 +163,26 @@ final class VariantConstructorLowerer {
         return out.toString();
     }
 
-    private static List<String> parseVariants(String body) {
-        List<String> variants = new ArrayList<>();
+    private static List<VariantInfo> parseVariants(String body, boolean generic) {
+        List<VariantInfo> variants = new ArrayList<>();
         for (String rawPart : SourceScanner.splitTopLevel(body, ',')) {
             String part = rawPart.strip();
             if (part.isEmpty()) {
                 continue;
             }
             int paren = part.indexOf('(');
-            variants.add(paren < 0 ? part : part.substring(0, paren).strip());
+            if (paren < 0) {
+                variants.add(new VariantInfo(part, generic, true));
+                continue;
+            }
+            int close = SourceScanner.findMatching(part, paren, '(', ')');
+            if (close < 0) {
+                variants.add(new VariantInfo(part, generic, true));
+                continue;
+            }
+            String name = part.substring(0, paren).strip();
+            String parameters = part.substring(paren + 1, close).strip();
+            variants.add(new VariantInfo(name, generic, parameters.isBlank()));
         }
         return variants;
     }
@@ -263,12 +283,26 @@ final class VariantConstructorLowerer {
     }
 
     record Registry(Map<String, VariantInfo> variants) {
+        static Registry empty() {
+            return new Registry(Map.of());
+        }
+
         boolean isEmpty() {
             return variants.isEmpty();
         }
+
+        boolean isNoArg(String name) {
+            VariantInfo variant = variants.get(name);
+            return variant != null && variant.noArgs();
+        }
+
+        boolean isGeneric(String name) {
+            VariantInfo variant = variants.get(name);
+            return variant != null && variant.generic();
+        }
     }
 
-    private record VariantInfo(String name, boolean generic) {
+    private record VariantInfo(String name, boolean generic, boolean noArgs) {
     }
 
     private record Range(int start, int end) {

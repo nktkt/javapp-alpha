@@ -73,28 +73,109 @@ final class DataEnumTranspiler {
                     .append('(')
                     .append(variant.parameters())
                     .append(") {\n")
-                    .append("        return new ")
-                    .append(variant.name());
-            if (!typeParameters.isBlank()) {
-                out.append("<>");
+                    .append("        return ");
+            if (variant.noArgs()) {
+                out.append(variant.name()).append(".instance()");
+            } else {
+                out.append("new ")
+                        .append(variant.name());
+                if (!typeParameters.isBlank()) {
+                    out.append("<>");
+                }
+                out.append('(').append(variant.argumentNames()).append(')');
             }
-            out.append('(').append(variant.argumentNames()).append(");\n");
-            out.append("    }\n\n");
+            out.append(";\n")
+                    .append("    }\n\n");
         }
 
         out.append("}\n\n");
 
         for (Variant variant : variants) {
-            out.append("record ")
-                    .append(variant.name())
-                    .append(typeParameters)
-                    .append('(')
-                    .append(variant.parameters())
-                    .append(") implements ")
-                    .append(enumType)
-                    .append(" {}\n");
+            if (variant.noArgs()) {
+                out.append(generateSingletonVariant(variant.name(), typeParameters, enumType));
+            } else {
+                out.append("record ")
+                        .append(variant.name())
+                        .append(typeParameters)
+                        .append('(')
+                        .append(variant.parameters())
+                        .append(") implements ")
+                        .append(enumType)
+                        .append(" {}\n");
+            }
         }
 
+        return out.toString();
+    }
+
+    private static String generateSingletonVariant(String name, String typeParameters, String enumType) {
+        boolean generic = !typeParameters.isBlank();
+        StringBuilder out = new StringBuilder();
+        out.append("final class ")
+                .append(name)
+                .append(typeParameters)
+                .append(" implements ")
+                .append(enumType)
+                .append(" {\n");
+        if (generic) {
+            out.append("    private static final ")
+                    .append(name)
+                    .append("<?> INSTANCE = new ")
+                    .append(name)
+                    .append("<>();\n\n");
+        } else {
+            out.append("    private static final ")
+                    .append(name)
+                    .append(" INSTANCE = new ")
+                    .append(name)
+                    .append("();\n\n");
+        }
+        out.append("    private ")
+                .append(name)
+                .append("() {\n")
+                .append("    }\n\n");
+        if (generic) {
+            out.append("    @SuppressWarnings(\"unchecked\")\n")
+                    .append("    static ")
+                    .append(typeParameters)
+                    .append(' ')
+                    .append(name)
+                    .append(toTypeArgumentList(typeParameters))
+                    .append(" instance() {\n")
+                    .append("        return (")
+                    .append(name)
+                    .append(toTypeArgumentList(typeParameters))
+                    .append(") INSTANCE;\n")
+                    .append("    }\n\n");
+        } else {
+            out.append("    static ")
+                    .append(name)
+                    .append(" instance() {\n")
+                    .append("        return INSTANCE;\n")
+                    .append("    }\n\n");
+        }
+        out.append("    @Override\n")
+                .append("    public boolean equals(Object other) {\n")
+                .append("        return other instanceof ")
+                .append(name);
+        if (generic) {
+            out.append("<?>");
+        }
+        out.append(";\n")
+                .append("    }\n\n")
+                .append("    @Override\n")
+                .append("    public int hashCode() {\n")
+                .append("        return ")
+                .append(name)
+                .append(".class.hashCode();\n")
+                .append("    }\n\n")
+                .append("    @Override\n")
+                .append("    public String toString() {\n")
+                .append("        return \"")
+                .append(name)
+                .append("\";\n")
+                .append("    }\n")
+                .append("}\n");
         return out.toString();
     }
 
@@ -107,19 +188,19 @@ final class DataEnumTranspiler {
             }
             int paren = part.indexOf('(');
             if (paren < 0) {
-                variants.add(new Variant(part, "", ""));
+                variants.add(new Variant(part, "", "", true));
                 continue;
             }
 
             int close = SourceScanner.findMatching(part, paren, '(', ')');
             if (close < 0) {
-                variants.add(new Variant(part, "", ""));
+                variants.add(new Variant(part, "", "", true));
                 continue;
             }
 
             String name = part.substring(0, paren).strip();
             String parameters = part.substring(paren + 1, close).strip();
-            variants.add(new Variant(name, parameters, argumentNames(parameters)));
+            variants.add(new Variant(name, parameters, argumentNames(parameters), parameters.isBlank()));
         }
         return variants;
     }
@@ -167,6 +248,6 @@ final class DataEnumTranspiler {
         return "<" + String.join(", ", names) + ">";
     }
 
-    private record Variant(String name, String parameters, String argumentNames) {
+    private record Variant(String name, String parameters, String argumentNames, boolean noArgs) {
     }
 }

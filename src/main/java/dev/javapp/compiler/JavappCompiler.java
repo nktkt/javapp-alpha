@@ -138,7 +138,7 @@ public final class JavappCompiler {
         String extensionCalls = ExtensionCallRewriter.rewrite(normalized, extensionRegistry);
         String variantConstructors = VariantConstructorLowerer.lower(extensionCalls, variantRegistry);
         String dataEnums = DataEnumTranspiler.transpile(variantConstructors);
-        String matches = MatchLowerer.lower(dataEnums);
+        String matches = MatchLowerer.lower(dataEnums, variantRegistry);
         String async = StructuredAsyncLowerer.lower(matches);
         String resources = ResourceLowerer.lower(async);
         String nullCoalescing = NullCoalescingLowerer.lower(resources);

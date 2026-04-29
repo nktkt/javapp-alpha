@@ -7,6 +7,10 @@ final class MatchLowerer {
     }
 
     static String lower(String source) {
+        return lower(source, VariantConstructorLowerer.Registry.empty());
+    }
+
+    static String lower(String source, VariantConstructorLowerer.Registry variantRegistry) {
         StringBuilder out = new StringBuilder(source.length());
         int cursor = 0;
 
@@ -50,14 +54,19 @@ final class MatchLowerer {
                     .append("switch (")
                     .append(selector)
                     .append(") {\n")
-                    .append(lowerCases(body, selector, indent + "    "))
+                    .append(lowerCases(body, selector, indent + "    ", variantRegistry))
                     .append(indent)
                     .append("}");
             cursor = braceEnd + 1;
         }
     }
 
-    private static String lowerCases(String body, String selector, String indent) {
+    private static String lowerCases(
+            String body,
+            String selector,
+            String indent,
+            VariantConstructorLowerer.Registry variantRegistry
+    ) {
         StringBuilder out = new StringBuilder();
         List<String> cases = SourceScanner.splitTopLevel(body, ';');
 
@@ -75,13 +84,18 @@ final class MatchLowerer {
 
             String pattern = part.substring(0, arrow).strip();
             String expression = part.substring(arrow + 2).strip();
-            out.append(indent).append(lowerPattern(pattern, selector, expression)).append('\n');
+            out.append(indent).append(lowerPattern(pattern, selector, expression, variantRegistry)).append('\n');
         }
 
         return out.toString();
     }
 
-    private static String lowerPattern(String pattern, String selector, String expression) {
+    private static String lowerPattern(
+            String pattern,
+            String selector,
+            String expression,
+            VariantConstructorLowerer.Registry variantRegistry
+    ) {
         GuardedPattern guarded = splitGuard(pattern);
         pattern = guarded.pattern();
         String guard = guarded.guard() == null ? "" : " when " + guarded.guard();
@@ -105,6 +119,12 @@ final class MatchLowerer {
             return "default -> { var " + name + " = " + selector + "; yield " + expression + "; }";
         }
 
+        String noArgVariant = noArgVariantName(pattern, variantRegistry);
+        if (noArgVariant != null) {
+            String typePattern = noArgVariant + (variantRegistry.isGeneric(noArgVariant) ? "<?> " : " ");
+            return "case " + typePattern + "__jpp" + noArgVariant + guard + " -> " + expression + ";";
+        }
+
         if (isBareVariant(pattern)) {
             return "case " + pattern + "()" + guard + " -> " + expression + ";";
         }
@@ -117,6 +137,25 @@ final class MatchLowerer {
             return false;
         }
         return Character.isUpperCase(pattern.charAt(0));
+    }
+
+    private static String noArgVariantName(String pattern, VariantConstructorLowerer.Registry variantRegistry) {
+        if (pattern.isEmpty()) {
+            return null;
+        }
+        if (isBareVariant(pattern) && variantRegistry.isNoArg(pattern)) {
+            return pattern;
+        }
+        int paren = pattern.indexOf('(');
+        if (paren <= 0 || !pattern.endsWith(")")) {
+            return null;
+        }
+        String name = pattern.substring(0, paren).strip();
+        String arguments = pattern.substring(paren + 1, pattern.length() - 1).strip();
+        if (arguments.isBlank() && variantRegistry.isNoArg(name)) {
+            return name;
+        }
+        return null;
     }
 
     static GuardedPattern splitGuard(String pattern) {

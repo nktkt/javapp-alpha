@@ -103,6 +103,8 @@ Alpha lowering:
 return new Ok<>(user);
 ```
 
+Payload-free variants lower to singleton classes instead of allocating a new object on every construction. For example, `None` in `Option<T>` is emitted as a final class with a shared `None<?>` instance, and `None()` lowers to `None.instance()`. A `match` case such as `None -> "empty"` lowers to a Java type pattern.
+
 ## Data Class
 
 ```java

@@ -111,6 +111,13 @@ public final class TranspilerSmokeTest {
                     static Maybe<String> none() {
                         return None();
                     }
+
+                    static String render(Maybe<String> maybe) {
+                        return match (maybe) {
+                            Some(var value) -> "some: {value}";
+                            None -> "none";
+                        };
+                    }
                 }
                 """, StandardCharsets.UTF_8);
 
@@ -291,8 +298,14 @@ public final class TranspilerSmokeTest {
         String maybeJava = Files.readString(generated.resolve("app/demo/Maybe.java"), StandardCharsets.UTF_8);
         require(maybeJava.contains("return new Some<>(value);"),
                 "bare generic data enum variant constructor should lower with diamond");
-        require(maybeJava.contains("return new None<>();"),
-                "bare no-arg generic data enum variant constructor should lower with diamond");
+        require(maybeJava.contains("final class None<T> implements Maybe<T>"),
+                "no-arg data enum variant should lower to singleton class");
+        require(maybeJava.contains("private static final None<?> INSTANCE = new None<>();"),
+                "generic no-arg data enum singleton should keep one shared instance");
+        require(maybeJava.contains("return None.instance();"),
+                "bare no-arg generic data enum variant constructor should lower to singleton access");
+        require(maybeJava.contains("case None<?> __jppNone -> \"none\";"),
+                "bare no-arg data enum match should lower to type pattern");
         try (URLClassLoader loader = new URLClassLoader(new URL[]{classes.toUri().toURL()})) {
             Class<?> resultView = Class.forName("app.demo.ResultView", true, loader);
             var okFactory = resultView.getDeclaredMethod("ok", String.class);
@@ -317,8 +330,17 @@ public final class TranspilerSmokeTest {
                     "bare Some(value) constructor should run");
             var noneFactory = maybeFactory.getDeclaredMethod("none");
             noneFactory.setAccessible(true);
-            require(noneFactory.invoke(null).getClass().getSimpleName().equals("None"),
+            Object none = noneFactory.invoke(null);
+            Object anotherNone = noneFactory.invoke(null);
+            require(none.getClass().getSimpleName().equals("None"),
                     "bare None() constructor should run");
+            require(none == anotherNone, "bare None() constructor should return singleton instance");
+            var renderMaybe = maybeFactory.getDeclaredMethod("render", Class.forName("app.demo.Maybe", true, loader));
+            renderMaybe.setAccessible(true);
+            require("some: value".equals(renderMaybe.invoke(null, someFactory.invoke(null, "value"))),
+                    "data enum match should render payload variant");
+            require("none".equals(renderMaybe.invoke(null, none)),
+                    "data enum match should render singleton no-arg variant");
         }
 
         String resourceJava = Files.readString(generated.resolve("app/demo/ResourceDemo.java"), StandardCharsets.UTF_8);

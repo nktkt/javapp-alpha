@@ -60,6 +60,7 @@ src/test/     executable smoke test
 
 - `data enum` lowered to sealed interfaces plus records
 - bare `data enum` variant constructors such as `Ok(value)` lowered to Java record construction
+- no-arg `data enum` variants lowered to singleton classes
 - field-only `data class` lowered to Java `record`
 - `match (...) { ... }` lowered to Java `switch`
 - guarded `match` cases with `when`
