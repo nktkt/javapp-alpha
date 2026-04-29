@@ -7,4 +7,8 @@ data class Profile {
     String label() {
         return "{name}:{age}";
     }
+
+    Profile birthday() {
+        return withAge(age + 1);
+    }
 }

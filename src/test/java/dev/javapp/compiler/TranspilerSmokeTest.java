@@ -356,14 +356,39 @@ public final class TranspilerSmokeTest {
         String userJava = Files.readString(generated.resolve("app/demo/User.java"), StandardCharsets.UTF_8);
         require(userJava.contains("record User(UserId id, String name, String nickname)"),
                 "field-only data class should lower to record");
+        require(userJava.contains("public User copy(UserId id, String name, String nickname)"),
+                "field-only data class should generate full copy method");
+        require(userJava.contains("public User withName(String name)"),
+                "field-only data class should generate per-field with methods");
         require(userJava.contains("record UserId(long value)"),
                 "value record should still lower to record");
+        try (URLClassLoader loader = new URLClassLoader(new URL[]{classes.toUri().toURL()})) {
+            Class<?> userId = Class.forName("app.demo.UserId", true, loader);
+            var userIdConstructor = userId.getDeclaredConstructor(long.class);
+            userIdConstructor.setAccessible(true);
+            Object id = userIdConstructor.newInstance(1L);
+            Class<?> user = Class.forName("app.demo.User", true, loader);
+            var userConstructor = user.getDeclaredConstructor(userId, String.class, String.class);
+            userConstructor.setAccessible(true);
+            Object original = userConstructor.newInstance(id, "Aki", null);
+            var withName = user.getDeclaredMethod("withName", String.class);
+            withName.setAccessible(true);
+            Object renamed = withName.invoke(original, "Mika");
+            var nameAccessor = user.getDeclaredMethod("name");
+            nameAccessor.setAccessible(true);
+            require("Mika".equals(nameAccessor.invoke(renamed)),
+                    "field-only data class with-field method should run");
+        }
 
         String profileJava = Files.readString(generated.resolve("app/demo/Profile.java"), StandardCharsets.UTF_8);
         require(profileJava.contains("final class Profile"), "data class with methods should lower to final class");
         require(profileJava.contains("private final String name;"), "data class class lowering should create final fields");
         require(profileJava.contains("public Profile(String name, int age)"), "data class class lowering should create constructor");
         require(profileJava.contains("public String name()"), "data class class lowering should create accessors");
+        require(profileJava.contains("public Profile copy(String name, int age)"),
+                "data class class lowering should create full copy method");
+        require(profileJava.contains("public Profile withAge(int age)"),
+                "data class class lowering should create per-field with methods");
         require(profileJava.contains("public boolean equals(Object other)"), "data class class lowering should create equals");
         require(profileJava.contains("public int hashCode()"), "data class class lowering should create hashCode");
         require(profileJava.contains("public String toString()"), "data class class lowering should create toString");
@@ -386,6 +411,14 @@ public final class TranspilerSmokeTest {
             require(left.hashCode() == right.hashCode(), "data class generated hashCode should match equal fields");
             require(left.toString().contains("Profile[name=Aki, age=30"),
                     "data class generated toString should include field names");
+            var withAge = profile.getDeclaredMethod("withAge", int.class);
+            withAge.setAccessible(true);
+            Object older = withAge.invoke(left, 31);
+            require("Aki:31".equals(label.invoke(older)), "data class with-field method should copy with one replacement");
+            var copy = profile.getDeclaredMethod("copy", String.class, int.class);
+            copy.setAccessible(true);
+            Object copied = copy.invoke(left, "Mika", 20);
+            require("Mika:20".equals(label.invoke(copied)), "data class copy should replace all fields");
         }
 
         String stringExtensionsJava = Files.readString(generated.resolve("app/demo/StringExtensions.java"), StandardCharsets.UTF_8);

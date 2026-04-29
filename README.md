@@ -65,7 +65,8 @@ src/test/     executable smoke test
 - guarded `match` cases with `when`
 - same-project `data enum` match exhaustiveness warnings
 - nullable type markers `T?` and platform markers `T!` parsed and stripped for Java output
-- method-bearing `data class` lowered to final classes with constructors, accessors, and value methods
+- `data class` copy helpers: `copy(...)` and per-field `withName(...)` methods
+- method-bearing `data class` lowered to final classes with constructors, accessors, copy helpers, and value methods
 - direct nullable dereference diagnostics for `--null warn|strict`, including guard clauses and not-null blocks
 - null coalescing with `left ?? fallback`
 - `effect IO, DB` markers parsed and stripped for Java output

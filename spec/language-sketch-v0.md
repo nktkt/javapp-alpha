@@ -132,6 +132,13 @@ data class Profile {
 }
 ```
 
+Both record-backed and class-backed data classes generate a full-field `copy(...)` method and per-field `withX(...)` helpers:
+
+```java
+Profile older = profile.withAge(profile.age() + 1);
+Profile renamed = profile.copy("Mika", profile.age());
+```
+
 Field initializers and more complex class members still fall back to ordinary classes.
 
 ## Match

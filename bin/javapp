@@ -2,12 +2,18 @@
 set -eu
 
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-CLASSES_DIR="$ROOT_DIR/.javapp/bootstrap-classes"
+BOOTSTRAP_DIR="${TMPDIR:-/tmp}/javapp-bootstrap-$$"
+CLASSES_DIR="$BOOTSTRAP_DIR/classes"
+SOURCES_FILE="$BOOTSTRAP_DIR/sources.list"
+
+cleanup() {
+  rm -rf "$BOOTSTRAP_DIR"
+}
+trap cleanup EXIT
 
 mkdir -p "$CLASSES_DIR"
 
-find "$ROOT_DIR/src/main/java" -name '*.java' > "$ROOT_DIR/.javapp/sources.list"
-javac --release 25 -d "$CLASSES_DIR" @"$ROOT_DIR/.javapp/sources.list"
+find "$ROOT_DIR/src/main/java" -name '*.java' > "$SOURCES_FILE"
+javac --release 25 -d "$CLASSES_DIR" @"$SOURCES_FILE"
 
-exec java -cp "$CLASSES_DIR" dev.javapp.cli.Main "$@"
-
+java -cp "$CLASSES_DIR" dev.javapp.cli.Main "$@"

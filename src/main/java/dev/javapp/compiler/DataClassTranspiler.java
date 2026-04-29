@@ -42,13 +42,7 @@ final class DataClassTranspiler {
             } else if (!parsedBody.members().isEmpty()) {
                 out.append(generateClass(access, name, typeParameters, parsedBody));
             } else {
-                out.append(access)
-                        .append("record ")
-                        .append(name)
-                        .append(typeParameters)
-                        .append('(')
-                        .append(recordComponents(parsedBody.fields()))
-                        .append(") {}\n");
+                out.append(generateRecord(access, name, typeParameters, parsedBody.fields()));
             }
 
             cursor = closeBrace + 1;
@@ -212,8 +206,24 @@ final class DataClassTranspiler {
         return String.join(", ", components);
     }
 
+    private static String generateRecord(String access, String name, String typeParameters, List<Field> fields) {
+        StringBuilder out = new StringBuilder();
+        String typeArguments = toTypeArgumentList(typeParameters);
+        out.append(access)
+                .append("record ")
+                .append(name)
+                .append(typeParameters)
+                .append('(')
+                .append(recordComponents(fields))
+                .append(") {\n");
+        out.append(generateCopyMethods(name, typeArguments, fields));
+        out.append("}\n");
+        return out.toString();
+    }
+
     private static String generateClass(String access, String name, String typeParameters, Body body) {
         StringBuilder out = new StringBuilder();
+        String typeArguments = toTypeArgumentList(typeParameters);
         out.append(access)
                 .append("final class ")
                 .append(name)
@@ -255,6 +265,7 @@ final class DataClassTranspiler {
                     .append("    }\n\n");
         }
 
+        out.append(generateCopyMethods(name, typeArguments, body.fields()));
         out.append(generateEquals(name, body.fields()));
         out.append(generateHashCode(body.fields()));
         out.append(generateToString(name, body.fields()));
@@ -265,6 +276,59 @@ final class DataClassTranspiler {
 
         out.append("}\n");
         return out.toString();
+    }
+
+    private static String generateCopyMethods(String name, String typeArguments, List<Field> fields) {
+        String type = name + typeArguments;
+        String constructor = name + (typeArguments.isBlank() ? "" : "<>");
+        StringBuilder out = new StringBuilder();
+        out.append("    public ")
+                .append(type)
+                .append(" copy(")
+                .append(recordComponents(fields))
+                .append(") {\n")
+                .append("        return new ")
+                .append(constructor)
+                .append('(')
+                .append(fieldNames(fields))
+                .append(");\n")
+                .append("    }\n\n");
+
+        for (Field field : fields) {
+            out.append("    public ")
+                    .append(type)
+                    .append(" with")
+                    .append(capitalize(field.name()))
+                    .append('(')
+                    .append(field.type())
+                    .append(' ')
+                    .append(field.name())
+                    .append(") {\n")
+                    .append("        return copy(")
+                    .append(copyArguments(fields, field))
+                    .append(");\n")
+                    .append("    }\n\n");
+        }
+        return out.toString();
+    }
+
+    private static String copyArguments(List<Field> fields, Field replacement) {
+        List<String> arguments = new ArrayList<>();
+        for (Field field : fields) {
+            if (field.name().equals(replacement.name())) {
+                arguments.add(field.name());
+            } else {
+                arguments.add("this." + field.name());
+            }
+        }
+        return String.join(", ", arguments);
+    }
+
+    private static String capitalize(String value) {
+        if (value.isEmpty()) {
+            return value;
+        }
+        return Character.toUpperCase(value.charAt(0)) + value.substring(1);
     }
 
     private static String generateEquals(String name, List<Field> fields) {
@@ -398,6 +462,23 @@ final class DataClassTranspiler {
             }
         }
         return true;
+    }
+
+    private static String toTypeArgumentList(String typeParameters) {
+        if (typeParameters.isBlank()) {
+            return "";
+        }
+        String inner = typeParameters.substring(1, typeParameters.length() - 1);
+        List<String> names = new ArrayList<>();
+        for (String part : SourceScanner.splitTopLevel(inner, ',')) {
+            String trimmed = part.strip();
+            int bound = trimmed.indexOf(" extends ");
+            if (bound >= 0) {
+                trimmed = trimmed.substring(0, bound).strip();
+            }
+            names.add(trimmed);
+        }
+        return "<" + String.join(", ", names) + ">";
     }
 
     private record Field(String type, String name) {
