@@ -84,6 +84,14 @@ public final class TranspilerSmokeTest {
                             Err(var error) -> "err: {error}";
                         };
                     }
+
+                    static String renderGuarded(Result<String, String> result) {
+                        return match (result) {
+                            Ok(var value) when !value.isBlank() -> "ok: {value}";
+                            Ok(var value) -> "blank";
+                            Err(var error) -> "err: {error}";
+                        };
+                    }
                 }
                 """, StandardCharsets.UTF_8);
 
@@ -265,6 +273,8 @@ public final class TranspilerSmokeTest {
                 "bare data enum variant constructor should lower to record construction");
         require(resultViewJava.contains("return new Err<>(error);"),
                 "bare data enum variant constructor should lower generic err construction");
+        require(resultViewJava.contains("case Ok(var value) when !value.isBlank()"),
+                "guarded match case should lower to Java pattern switch guard");
         String maybeJava = Files.readString(generated.resolve("app/demo/Maybe.java"), StandardCharsets.UTF_8);
         require(maybeJava.contains("return new Some<>(value);"),
                 "bare generic data enum variant constructor should lower with diamond");
@@ -280,6 +290,12 @@ public final class TranspilerSmokeTest {
             errFactory.setAccessible(true);
             require(errFactory.invoke(null, "error").getClass().getSimpleName().equals("Err"),
                     "bare Err(error) constructor should run");
+            var renderGuarded = resultView.getDeclaredMethod("renderGuarded", Class.forName("app.demo.Result", true, loader));
+            renderGuarded.setAccessible(true);
+            require("ok: value".equals(renderGuarded.invoke(null, okFactory.invoke(null, "value"))),
+                    "guarded match should take guarded branch when guard passes");
+            require("blank".equals(renderGuarded.invoke(null, okFactory.invoke(null, ""))),
+                    "guarded match should fall through when guard fails");
 
             Class<?> maybeFactory = Class.forName("app.demo.MaybeFactory", true, loader);
             var someFactory = maybeFactory.getDeclaredMethod("some", String.class);
@@ -507,6 +523,39 @@ public final class TranspilerSmokeTest {
                 enumRegistry
         );
         require(exhaustive.isEmpty(), "data enum match should accept exhaustive cases");
+
+        var guardedNonExhaustive = MatchExhaustivenessAnalyzer.analyze(
+                Path.of("MaybeView.jpp"),
+                """
+                class MaybeView {
+                    static String render(Maybe<String> maybe) {
+                        return match (maybe) {
+                            Some(var value) when !value.isBlank() -> value;
+                            None -> "";
+                        };
+                    }
+                }
+                """,
+                enumRegistry
+        );
+        require(guardedNonExhaustive.stream().anyMatch(diagnostic -> diagnostic.message().contains("missing variants: Some")),
+                "guarded data enum cases should not count as exhaustive unless the guard is true");
+
+        var guardedTrueExhaustive = MatchExhaustivenessAnalyzer.analyze(
+                Path.of("MaybeView.jpp"),
+                """
+                class MaybeView {
+                    static String render(Maybe<String> maybe) {
+                        return match (maybe) {
+                            Some(var value) when true -> value;
+                            None -> "";
+                        };
+                    }
+                }
+                """,
+                enumRegistry
+        );
+        require(guardedTrueExhaustive.isEmpty(), "when true should count as exhaustive");
 
         var effectRegistry = EffectAnalyzer.collectEffectfulMethods(List.of("""
                 class Effects {

@@ -130,6 +130,16 @@ String message = match (result) {
 };
 ```
 
+Guarded cases use Java-style `when` guards:
+
+```java
+String message = match (result) {
+    Ok(var value) when !value.isBlank() -> "ok: {value}";
+    Ok(var value) -> "blank";
+    Err(var error) -> "err: {error}";
+};
+```
+
 Alpha lowering:
 
 ```java
@@ -146,6 +156,8 @@ return match (result) {
     Ok(var user) -> user.name();
 }; // warning: missing variants: Err
 ```
+
+Guarded cases do not count toward exhaustiveness unless the guard is literally `true`, because the guard may reject a value at runtime.
 
 ## Runtime Option / Result
 

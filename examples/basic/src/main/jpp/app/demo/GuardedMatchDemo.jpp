@@ -1,0 +1,11 @@
+package app.demo;
+
+class GuardedMatchDemo {
+    static String render(Result<String, String> result) {
+        return match (result) {
+            Ok(var value) when !value.isBlank() -> "ok: {value}";
+            Ok(var value) -> "blank";
+            Err(var error) -> "err: {error}";
+        };
+    }
+}

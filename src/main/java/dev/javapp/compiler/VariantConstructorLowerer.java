@@ -219,7 +219,8 @@ final class VariantConstructorLowerer {
             return false;
         }
         int next = SourceScanner.skipWhitespace(source, close + 1);
-        return next + 1 < source.length() && source.charAt(next) == '-' && source.charAt(next + 1) == '>';
+        return next + 1 < source.length() && source.charAt(next) == '-' && source.charAt(next + 1) == '>'
+                || startsWithKeyword(source, "when", next);
     }
 
     private static int readIdentifierEnd(String source, int start) {
@@ -248,6 +249,17 @@ final class VariantConstructorLowerer {
             return "";
         }
         return source.substring(start, end);
+    }
+
+    private static boolean startsWithKeyword(String source, String keyword, int index) {
+        if (!source.startsWith(keyword, index)) {
+            return false;
+        }
+        int before = index - 1;
+        int after = index + keyword.length();
+        boolean cleanBefore = before < 0 || !Character.isJavaIdentifierPart(source.charAt(before));
+        boolean cleanAfter = after >= source.length() || !Character.isJavaIdentifierPart(source.charAt(after));
+        return cleanBefore && cleanAfter;
     }
 
     record Registry(Map<String, VariantInfo> variants) {

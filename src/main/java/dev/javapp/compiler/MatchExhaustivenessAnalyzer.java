@@ -141,6 +141,11 @@ final class MatchExhaustivenessAnalyzer {
             }
 
             String pattern = part.substring(0, arrow).strip();
+            MatchLowerer.GuardedPattern guarded = MatchLowerer.splitGuard(pattern);
+            if (guarded.guard() != null && !guarded.guard().equals("true")) {
+                continue;
+            }
+            pattern = guarded.pattern();
             if (isWildcard(pattern)) {
                 return new Exhaustiveness(true, Set.of());
             }

@@ -62,6 +62,7 @@ src/test/     executable smoke test
 - bare `data enum` variant constructors such as `Ok(value)` lowered to Java record construction
 - field-only `data class` lowered to Java `record`
 - `match (...) { ... }` lowered to Java `switch`
+- guarded `match` cases with `when`
 - same-project `data enum` match exhaustiveness warnings
 - nullable type markers `T?` and platform markers `T!` parsed and stripped for Java output
 - direct nullable dereference diagnostics for `--null warn|strict`, including guard clauses and not-null blocks

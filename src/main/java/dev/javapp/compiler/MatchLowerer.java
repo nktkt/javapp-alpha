@@ -82,7 +82,14 @@ final class MatchLowerer {
     }
 
     private static String lowerPattern(String pattern, String selector, String expression) {
+        GuardedPattern guarded = splitGuard(pattern);
+        pattern = guarded.pattern();
+        String guard = guarded.guard() == null ? "" : " when " + guarded.guard();
+
         if (pattern.equals("_") || pattern.equals("else") || pattern.equals("default")) {
+            if (!guard.isBlank()) {
+                return "case var __jppAny" + guard + " -> " + expression + ";";
+            }
             return "default -> " + expression + ";";
         }
 
@@ -92,14 +99,17 @@ final class MatchLowerer {
 
         if (pattern.startsWith("var ")) {
             String name = pattern.substring("var ".length()).strip();
+            if (!guard.isBlank()) {
+                return "case var " + name + guard + " -> " + expression + ";";
+            }
             return "default -> { var " + name + " = " + selector + "; yield " + expression + "; }";
         }
 
         if (isBareVariant(pattern)) {
-            return "case " + pattern + "() -> " + expression + ";";
+            return "case " + pattern + "()" + guard + " -> " + expression + ";";
         }
 
-        return "case " + pattern + " -> " + expression + ";";
+        return "case " + pattern + guard + " -> " + expression + ";";
     }
 
     private static boolean isBareVariant(String pattern) {
@@ -107,6 +117,111 @@ final class MatchLowerer {
             return false;
         }
         return Character.isUpperCase(pattern.charAt(0));
+    }
+
+    static GuardedPattern splitGuard(String pattern) {
+        int when = findTopLevelWhen(pattern);
+        if (when < 0) {
+            return new GuardedPattern(pattern.strip(), null);
+        }
+        return new GuardedPattern(
+                pattern.substring(0, when).strip(),
+                pattern.substring(when + "when".length()).strip()
+        );
+    }
+
+    private static int findTopLevelWhen(String source) {
+        SourceScanner.State state = SourceScanner.State.CODE;
+        int paren = 0;
+        int bracket = 0;
+        int brace = 0;
+
+        for (int i = 0; i < source.length(); i++) {
+            char c = source.charAt(i);
+            char n = i + 1 < source.length() ? source.charAt(i + 1) : '\0';
+
+            switch (state) {
+                case CODE -> {
+                    if (c == '/' && n == '/') {
+                        state = SourceScanner.State.LINE_COMMENT;
+                        i++;
+                    } else if (c == '/' && n == '*') {
+                        state = SourceScanner.State.BLOCK_COMMENT;
+                        i++;
+                    } else if (c == '"') {
+                        if (i + 2 < source.length()
+                                && source.charAt(i + 1) == '"'
+                                && source.charAt(i + 2) == '"') {
+                            state = SourceScanner.State.TEXT_BLOCK;
+                            i += 2;
+                        } else {
+                            state = SourceScanner.State.STRING;
+                        }
+                    } else if (c == '\'') {
+                        state = SourceScanner.State.CHAR;
+                    } else if (c == '(') {
+                        paren++;
+                    } else if (c == ')') {
+                        paren = Math.max(0, paren - 1);
+                    } else if (c == '[') {
+                        bracket++;
+                    } else if (c == ']') {
+                        bracket = Math.max(0, bracket - 1);
+                    } else if (c == '{') {
+                        brace++;
+                    } else if (c == '}') {
+                        brace = Math.max(0, brace - 1);
+                    } else if (paren == 0 && bracket == 0 && brace == 0 && startsWithKeyword(source, "when", i)) {
+                        return i;
+                    }
+                }
+                case LINE_COMMENT -> {
+                    if (c == '\n') {
+                        state = SourceScanner.State.CODE;
+                    }
+                }
+                case BLOCK_COMMENT -> {
+                    if (c == '*' && n == '/') {
+                        state = SourceScanner.State.CODE;
+                        i++;
+                    }
+                }
+                case STRING -> {
+                    if (c == '\\') {
+                        i++;
+                    } else if (c == '"') {
+                        state = SourceScanner.State.CODE;
+                    }
+                }
+                case CHAR -> {
+                    if (c == '\\') {
+                        i++;
+                    } else if (c == '\'') {
+                        state = SourceScanner.State.CODE;
+                    }
+                }
+                case TEXT_BLOCK -> {
+                    if (c == '"' && i + 2 < source.length()
+                            && source.charAt(i + 1) == '"'
+                            && source.charAt(i + 2) == '"') {
+                        state = SourceScanner.State.CODE;
+                        i += 2;
+                    }
+                }
+            }
+        }
+        return -1;
+    }
+
+    private static boolean startsWithKeyword(String source, String keyword, int index) {
+        if (!source.startsWith(keyword, index)) {
+            return false;
+        }
+        int before = index - 1;
+        int after = index + keyword.length();
+        boolean cleanBefore = before < 0 || !Character.isJavaIdentifierPart(source.charAt(before));
+        boolean cleanAfter = after >= source.length() || !Character.isJavaIdentifierPart(source.charAt(after));
+        return cleanBefore && cleanAfter;
     }
 
     private static String lineIndent(String source, int index) {
@@ -124,5 +239,8 @@ final class MatchLowerer {
             cursor++;
         }
         return source.substring(lineStart, cursor);
+    }
+
+    record GuardedPattern(String pattern, String guard) {
     }
 }
