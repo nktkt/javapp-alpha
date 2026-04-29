@@ -119,7 +119,20 @@ Alpha lowering:
 record User(UserId id, String name, String nickname) {}
 ```
 
-The alpha compiler lowers field-only data classes to records. Data classes with methods or field initializers currently fall back to ordinary classes.
+The alpha compiler lowers field-only data classes to records. If a data class has simple fields plus methods, it lowers to a final class with private final fields, a constructor, record-style accessors, and generated `equals`, `hashCode`, and `toString` methods:
+
+```java
+data class Profile {
+    String name;
+    int age;
+
+    String label() {
+        return "{name}:{age}";
+    }
+}
+```
+
+Field initializers and more complex class members still fall back to ordinary classes.
 
 ## Match
 

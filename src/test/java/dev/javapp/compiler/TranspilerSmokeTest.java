@@ -176,6 +176,19 @@ public final class TranspilerSmokeTest {
                 }
                 """, StandardCharsets.UTF_8);
 
+        Files.writeString(packageRoot.resolve("Profile.jpp"), """
+                package app.demo;
+
+                data class Profile {
+                    String name;
+                    int age;
+
+                    String label() {
+                        return "{name}:{age}";
+                    }
+                }
+                """, StandardCharsets.UTF_8);
+
         Files.writeString(packageRoot.resolve("StringExtensions.jpp"), """
                 package app.demo;
 
@@ -345,6 +358,35 @@ public final class TranspilerSmokeTest {
                 "field-only data class should lower to record");
         require(userJava.contains("record UserId(long value)"),
                 "value record should still lower to record");
+
+        String profileJava = Files.readString(generated.resolve("app/demo/Profile.java"), StandardCharsets.UTF_8);
+        require(profileJava.contains("final class Profile"), "data class with methods should lower to final class");
+        require(profileJava.contains("private final String name;"), "data class class lowering should create final fields");
+        require(profileJava.contains("public Profile(String name, int age)"), "data class class lowering should create constructor");
+        require(profileJava.contains("public String name()"), "data class class lowering should create accessors");
+        require(profileJava.contains("public boolean equals(Object other)"), "data class class lowering should create equals");
+        require(profileJava.contains("public int hashCode()"), "data class class lowering should create hashCode");
+        require(profileJava.contains("public String toString()"), "data class class lowering should create toString");
+        require(profileJava.contains("String label()"), "data class class lowering should preserve methods");
+        try (URLClassLoader loader = new URLClassLoader(new URL[]{classes.toUri().toURL()})) {
+            Class<?> profile = Class.forName("app.demo.Profile", true, loader);
+            var constructor = profile.getDeclaredConstructor(String.class, int.class);
+            constructor.setAccessible(true);
+            Object left = constructor.newInstance("Aki", 30);
+            Object right = constructor.newInstance("Aki", 30);
+            Object other = constructor.newInstance("Nao", 31);
+            var label = profile.getDeclaredMethod("label");
+            label.setAccessible(true);
+            require("Aki:30".equals(label.invoke(left)), "data class preserved method should run");
+            var nameAccessor = profile.getDeclaredMethod("name");
+            nameAccessor.setAccessible(true);
+            require("Aki".equals(nameAccessor.invoke(left)), "data class accessor should run");
+            require(left.equals(right), "data class generated equals should compare fields");
+            require(!left.equals(other), "data class generated equals should reject different fields");
+            require(left.hashCode() == right.hashCode(), "data class generated hashCode should match equal fields");
+            require(left.toString().contains("Profile[name=Aki, age=30"),
+                    "data class generated toString should include field names");
+        }
 
         String stringExtensionsJava = Files.readString(generated.resolve("app/demo/StringExtensions.java"), StandardCharsets.UTF_8);
         require(stringExtensionsJava.contains("final class StringExtensions"), "extension should lower to utility class");

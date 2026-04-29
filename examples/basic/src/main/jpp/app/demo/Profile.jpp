@@ -1,0 +1,10 @@
+package app.demo;
+
+data class Profile {
+    String name;
+    int age;
+
+    String label() {
+        return "{name}:{age}";
+    }
+}
