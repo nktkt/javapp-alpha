@@ -1,5 +1,7 @@
 # Java++ Alpha
 
+[![CI](https://github.com/nktkt/javapp-alpha/actions/workflows/ci.yml/badge.svg)](https://github.com/nktkt/javapp-alpha/actions/workflows/ci.yml)
+
 Java++ Alpha is an experimental JVM language layer that keeps Java interop first while adding safer and more expressive syntax in front of ordinary Java bytecode.
 
 It is not a new VM and it is not a replacement for the Java standard library. The current prototype transpiles `.jpp` files into Java source and then relies on the ordinary JDK toolchain.

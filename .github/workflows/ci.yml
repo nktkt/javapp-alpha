@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      - name: Run smoke test
+        run: ./scripts/test.sh
+
+      - name: Check Java++ examples
+        run: ./bin/javapp check --source examples/basic/src/main/jpp --null strict --effects strict --format json
+
+      - name: Verify Java++ formatting
+        run: ./bin/javapp fmt examples/basic/src/main/jpp --check
+
+      - name: Build Java++ examples
+        run: ./bin/javapp build --source examples/basic/src/main/jpp --classes build/classes --null strict --effects strict
+
+      - name: Package CLI
+        run: mvn -q -DskipTests package
