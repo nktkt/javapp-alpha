@@ -59,6 +59,7 @@ src/test/     executable smoke test
 ## Implemented In This Alpha
 
 - `data enum` lowered to sealed interfaces plus records
+- bare `data enum` variant constructors such as `Ok(value)` lowered to Java record construction
 - field-only `data class` lowered to Java `record`
 - `match (...) { ... }` lowered to Java `switch`
 - same-project `data enum` match exhaustiveness warnings

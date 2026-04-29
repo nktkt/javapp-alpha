@@ -34,6 +34,7 @@ public final class JavappCompiler {
         Map<String, Set<String>> dataEnums = MatchExhaustivenessAnalyzer.collectDataEnums(inputs.values());
         Map<String, Set<String>> effectfulMethods = EffectAnalyzer.collectEffectfulMethods(inputs.values());
         ExtensionRegistry extensions = ExtensionMethodTranspiler.collectExtensions(inputs.values());
+        VariantConstructorLowerer.Registry variants = VariantConstructorLowerer.collect(inputs.values());
 
         for (Path source : sources) {
             Path relative = sourceRoot.relativize(source);
@@ -43,7 +44,7 @@ public final class JavappCompiler {
             String input = inputs.get(source);
             List<Diagnostic> diagnostics = analyzeSource(source, input, dataEnums, effectfulMethods, nullMode, effectMode);
 
-            String java = transpileSource(input, extensions);
+            String java = transpileSource(input, extensions, variants);
             Files.createDirectories(output.getParent());
             Files.writeString(output, java, StandardCharsets.UTF_8);
 
@@ -119,15 +120,24 @@ public final class JavappCompiler {
     }
 
     public String transpileSource(String input) {
-        return transpileSource(input, ExtensionMethodTranspiler.collectExtensions(List.of(input)));
+        return transpileSource(
+                input,
+                ExtensionMethodTranspiler.collectExtensions(List.of(input)),
+                VariantConstructorLowerer.collect(List.of(input))
+        );
     }
 
-    private String transpileSource(String input, ExtensionRegistry extensionRegistry) {
+    private String transpileSource(
+            String input,
+            ExtensionRegistry extensionRegistry,
+            VariantConstructorLowerer.Registry variantRegistry
+    ) {
         String dataClasses = DataClassTranspiler.transpile(input);
         String extensions = ExtensionMethodTranspiler.transpile(dataClasses);
         String normalized = JavaSourceNormalizer.normalize(extensions);
         String extensionCalls = ExtensionCallRewriter.rewrite(normalized, extensionRegistry);
-        String dataEnums = DataEnumTranspiler.transpile(extensionCalls);
+        String variantConstructors = VariantConstructorLowerer.lower(extensionCalls, variantRegistry);
+        String dataEnums = DataEnumTranspiler.transpile(variantConstructors);
         String matches = MatchLowerer.lower(dataEnums);
         String async = StructuredAsyncLowerer.lower(matches);
         String resources = ResourceLowerer.lower(async);

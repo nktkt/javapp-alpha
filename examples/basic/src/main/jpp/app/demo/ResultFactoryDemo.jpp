@@ -1,0 +1,11 @@
+package app.demo;
+
+class ResultFactoryDemo {
+    static Result<String, String> ok(String value) {
+        return Ok(value);
+    }
+
+    static Result<String, String> err(String error) {
+        return Err(error);
+    }
+}

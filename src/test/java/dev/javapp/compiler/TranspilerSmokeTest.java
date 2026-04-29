@@ -70,11 +70,38 @@ public final class TranspilerSmokeTest {
                 package app.demo;
 
                 class ResultView {
+                    static Result<String, String> ok(String value) {
+                        return Ok(value);
+                    }
+
+                    static Result<String, String> err(String error) {
+                        return Err(error);
+                    }
+
                     static String render(Result<String, String> result) {
                         return match (result) {
                             Ok(var value) -> "ok: {value}";
                             Err(var error) -> "err: {error}";
                         };
+                    }
+                }
+                """, StandardCharsets.UTF_8);
+
+        Files.writeString(packageRoot.resolve("Maybe.jpp"), """
+                package app.demo;
+
+                data enum Maybe<T> {
+                    Some(T value),
+                    None
+                }
+
+                class MaybeFactory {
+                    static Maybe<String> some(String value) {
+                        return Some(value);
+                    }
+
+                    static Maybe<String> none() {
+                        return None();
                     }
                 }
                 """, StandardCharsets.UTF_8);
@@ -231,6 +258,38 @@ public final class TranspilerSmokeTest {
             var calls = nullCoalesceDemo.getDeclaredField("calls");
             calls.setAccessible(true);
             require((int) calls.get(null) == 1, "method null coalesce should evaluate the left expression once");
+        }
+
+        String resultViewJava = Files.readString(generated.resolve("app/demo/ResultView.java"), StandardCharsets.UTF_8);
+        require(resultViewJava.contains("return new Ok<>(value);"),
+                "bare data enum variant constructor should lower to record construction");
+        require(resultViewJava.contains("return new Err<>(error);"),
+                "bare data enum variant constructor should lower generic err construction");
+        String maybeJava = Files.readString(generated.resolve("app/demo/Maybe.java"), StandardCharsets.UTF_8);
+        require(maybeJava.contains("return new Some<>(value);"),
+                "bare generic data enum variant constructor should lower with diamond");
+        require(maybeJava.contains("return new None<>();"),
+                "bare no-arg generic data enum variant constructor should lower with diamond");
+        try (URLClassLoader loader = new URLClassLoader(new URL[]{classes.toUri().toURL()})) {
+            Class<?> resultView = Class.forName("app.demo.ResultView", true, loader);
+            var okFactory = resultView.getDeclaredMethod("ok", String.class);
+            okFactory.setAccessible(true);
+            require(okFactory.invoke(null, "value").getClass().getSimpleName().equals("Ok"),
+                    "bare Ok(value) constructor should run");
+            var errFactory = resultView.getDeclaredMethod("err", String.class);
+            errFactory.setAccessible(true);
+            require(errFactory.invoke(null, "error").getClass().getSimpleName().equals("Err"),
+                    "bare Err(error) constructor should run");
+
+            Class<?> maybeFactory = Class.forName("app.demo.MaybeFactory", true, loader);
+            var someFactory = maybeFactory.getDeclaredMethod("some", String.class);
+            someFactory.setAccessible(true);
+            require(someFactory.invoke(null, "value").getClass().getSimpleName().equals("Some"),
+                    "bare Some(value) constructor should run");
+            var noneFactory = maybeFactory.getDeclaredMethod("none");
+            noneFactory.setAccessible(true);
+            require(noneFactory.invoke(null).getClass().getSimpleName().equals("None"),
+                    "bare None() constructor should run");
         }
 
         String resourceJava = Files.readString(generated.resolve("app/demo/ResourceDemo.java"), StandardCharsets.UTF_8);

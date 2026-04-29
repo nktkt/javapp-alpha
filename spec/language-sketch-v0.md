@@ -89,6 +89,20 @@ record Ok<T, E>(T value) implements Result<T, E> {}
 record Err<T, E>(E error) implements Result<T, E> {}
 ```
 
+Java++ code may construct variants with bare constructor syntax:
+
+```java
+Result<User, ApiError> found(User user) {
+    return Ok(user);
+}
+```
+
+Alpha lowering:
+
+```java
+return new Ok<>(user);
+```
+
 ## Data Class
 
 ```java
